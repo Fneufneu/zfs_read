@@ -1004,29 +1004,178 @@ build(char *path, mode_t omode)
 	return (retval);
 }
 
-#define	READ_BL_SIZE	128*1024
+#define	READ_BL_SIZE	512*1024
 char  *dirname(const char *);
+//const char *fname = "zfs:samsung:home";
+const char *fname = NULL;
+int	opt_copy = 0;
+int opt_recursive = 0;
+
+int
+zfs_recover(const char *file, struct open_file *f)
+{
+	int ret = 0;
+
+	//printf("zfs_recover file=%s\n", file);
+	ret = zfs_open(file, f);
+	if (ret != 0) {
+		printf("zfs_open failed: %s\n", strerror(ret));
+		return (1);
+	}
+	f->f_ops = &zfs_fsops;
+	f->f_rabuf = malloc(READ_BL_SIZE);
+	f->f_ralen = 0;
+	f->f_raoffset = 0;
+
+	if (!(f->f_flags & F_READ)) {
+		printf("no F_READ flag\n");
+		return (1);
+	}
+
+	struct stat sb;
+	if (0 != zfs_stat(f, &sb)) {
+		printf("zfs_stat failed\n");
+		return (1);
+	}
+
+	if (S_ISDIR(sb.st_mode)) {
+			struct dirent d;
+			const char * d_name;
+			SLIST_HEAD(slisthead, entry) head =
+				SLIST_HEAD_INITIALIZER(head);
+			struct entry {
+				SLIST_ENTRY(entry) entries;
+				char file[MAXNAMELEN];
+			} *n1;
+			SLIST_INIT(&head);
+			while ((ret = zfs_readdir(f, &d)) == 0) {
+				d_name = d.d_name;
+				n1 = malloc(sizeof(struct entry));
+				sprintf(n1->file, "%s/%s", file, d_name);
+				SLIST_INSERT_HEAD(&head, n1, entries);
+			}
+			zfs_close(f);
+			while (!SLIST_EMPTY(&head)) {
+				n1 = SLIST_FIRST(&head);
+				SLIST_REMOVE_HEAD(&head, entries);
+				d_name = n1->file;
+				while (d_name[0] == '/' && d_name[1] == '/')
+					++d_name;
+				printf("%s\n", d_name);
+				if (opt_recursive)
+						ret = zfs_recover(d_name, f);
+				free(n1);
+				if (opt_recursive && ret != 0)
+					return (ret);
+			}
+	} else if (S_ISREG(sb.st_mode)) {
+		//printf("file size=%d\n", (int)sb.st_size);
+		if (!opt_copy) {
+			printf("%s\n", file);
+			return (0);
+		}
+		char dest[MAXNAMELEN];
+		const char *lc;
+		const char *tmpd;
+		char dataset[256];
+		lc = strchr(fname, ':');
+		if (lc == NULL)
+			return (1);
+		tmpd = strchr(lc, '/');
+		lc = strchr(++lc, ':');
+		if (lc == NULL)
+			return (1);
+		if (tmpd == NULL || ((lc - tmpd) < 0)) {
+			strcpy(dataset, "");
+		} else {
+			++tmpd;
+			memset(dataset, 0, 256);
+			strncpy(dataset, tmpd, lc - tmpd);
+		}
+		//sprintf(dest, "/wdred/%s%s", dataset, ++lc);
+		sprintf(dest, "/wdred/%s%s", dataset, file);
+		char * folder;
+		folder = dirname(dest);
+		ret = build(folder, 0755);
+		if (ret == 0) {
+			printf("failed to mkdir %s\n", folder);
+			return (1);
+		}
+		struct stat sbdest;
+		ret = stat(dest, &sbdest);
+		if (ret == 0
+		&& S_ISREG(sbdest.st_mode)
+		&& sb.st_size == sbdest.st_size) {
+			return (0);
+		}
+		printf("writting in %s\n", dest);
+#define O_CREAT   0x0200
+		int fd = open(dest, O_WRONLY | O_CREAT);
+		if (fd < 0) {
+			printf("cannot open %s: %s\n", dest, strerror(errno));
+			return (1);
+		}
+		fchmod(fd, 0644);
+		ssize_t r;
+		char buf[32*1024];
+		while ((r = myread(f, buf, sizeof(buf))) > 0) {
+			ret = write(fd, buf, r);
+			if (ret != r)
+				break;
+		}
+		close(fd);
+		zfs_close(f);
+	}
+	return (0);
+}
 
 int
 main(int argc, char **argv)
 {
-	int ret;
+	int ret, ch, opt_devprint = 0;
+	const char * opt_zfs_list = NULL;
+
+	while ((ch = getopt(argc, argv, "df:rcl:")) != -1) {
+		switch (ch) {
+			case 'd':
+				opt_devprint = 1;
+				break;
+			case 'f':
+				fname = optarg;
+				break;
+			case 'c':
+				opt_copy = 1;
+				break;
+			case 'r':
+				opt_recursive = 1;
+				break;
+			case 'l':
+				opt_zfs_list = optarg;
+				break;
+			default:
+				return (0);
+		}
+	}
 	ret = zfs_dev_init();
 	if (ret != 0)
 		return (1);
-	//zfs_dev_print(0);
-	const char *fname = "zfs:samsung:home";
+	if (opt_devprint) {
+		zfs_dev_print(0);
+		return (0);
+	}
+	/* zfs list cmd */
+	if (opt_zfs_list != NULL) {
+			printf("dataset list %s:\n", opt_zfs_list);
+			ret = zfs_list(opt_zfs_list);
+			return (ret);
+	}
+	/* normal cmd */
+	if (fname == NULL) {
+		printf("plz select option f\n");
+		return (0);
+	}
 	const char *file;
 	int mode = O_RDONLY;
-	if (argc == 2)
-		fname = argv[1];
-#if 0
-	const char *pool_name = "samsung";
-	printf("dataset list %s:\n", pool_name);
-	ret = zfs_list(pool_name);
-	if (ret != 0)
-		return (3);
-#endif
 	struct open_file f;
 	f.f_flags = mode + 1;
 	f.f_dev = (struct devsw *)0;
@@ -1052,79 +1201,7 @@ main(int argc, char **argv)
 		printf("raw device\n");
 		return (1);
 	}
-	ret = zfs_open(file, &f);
-	if (ret != 0) {
-		printf("zfs_open failed: %s\n", strerror(ret));
-		return (1);
-	}
-	f.f_ops = &zfs_fsops;
-	f.f_rabuf = malloc(READ_BL_SIZE);
-	f.f_ralen = 0;
-	f.f_raoffset = 0;
-
-	if (!(f.f_flags & F_READ)) {
-		printf("no F_READ flag\n");
-		return (1);
-	}
-
-	struct stat sb;
-	if (0 != zfs_stat(&f, &sb)) {
-		printf("zfs_stat failed\n");
-		return (1);
-	}
-
-	if (S_ISDIR(sb.st_mode)) {
-			struct dirent d;
-			char buf[2048];
-			while ((ret = zfs_readdir(&f, &d)) == 0) {
-				if ('/' == d.d_name[0])
-						sprintf(buf, "%s%s", fname, d.d_name);
-				else
-						sprintf(buf, "%s/%s", fname, d.d_name);
-				printf("%s\n", buf);
-			}
-	} else if (S_ISREG(sb.st_mode)) {
-		//printf("file size=%d\n", (int)sb.st_size);
-		char dest[MAXNAMELEN];
-		const char *lc;
-		lc = strchr(fname, ':');
-		if (lc == NULL)
-			return (1);
-		lc = strchr(++lc, ':');
-		if (lc == NULL)
-			return (1);
-		sprintf(dest, "/wdred/Photos%s", ++lc);
-		char * folder;
-		folder = dirname(dest);
-		ret = build(folder, 0755);
-		if (ret == 0) {
-			printf("failed to mkdir %s\n", folder);
-			return (1);
-		}
-		struct stat sbdest;
-		ret = stat(dest, &sbdest);
-		if (ret == 0
-		&& S_ISREG(sbdest.st_mode)
-		&& sb.st_size == sbdest.st_size) {
-			return (0);
-		}
-		printf("writting in %s\n", dest);
-#define O_CREAT   0x0200
-		int fd = open(dest, O_WRONLY | O_CREAT);
-		if (fd < 0) {
-			printf("cannot open %s: %s\n", dest, strerror(errno));
-			return (1);
-		}
-		fchmod(fd, 0644);
-		ssize_t r;
-		char buf[1024];
-		while ((r = myread(&f, buf, sizeof(buf))) > 0) {
-			ret = write(fd, buf, r);
-			if (ret != r)
-				break;
-		}
-		close(fd);
-	}
+	ret = zfs_recover(file, &f);
 
 	return (0);
 }
