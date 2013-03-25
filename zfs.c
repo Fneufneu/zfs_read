@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD: stable/9/sys/boot/zfs/zfs.c 243243 2012-11-18 17:09:29Z ae $
 #include <string.h>
 #include <stand.h>
 #include <bootstrap.h>
+#include <sysexits.h>
 
 #include "libzfs.h"
 
@@ -1005,9 +1006,8 @@ build(char *path, mode_t omode)
 }
 
 #define	READ_BL_SIZE	512*1024
-char  *dirname(const char *);
-//const char *fname = "zfs:samsung:home";
-const char *fname = NULL;
+char *dirname(const char *);
+char *fname = NULL;
 int	opt_copy = 0;
 int opt_recursive = 0;
 
@@ -1131,6 +1131,24 @@ zfs_recover(const char *file, struct open_file *f)
 	return (0);
 }
 
+static void
+usage(void)
+{
+	
+	printf("%s\n%s\n%s\n\n",
+		"usage: zfs_read -d",
+		"       zfs_read -l <pool_name>",
+		"       zfs_read [-c] [-r] -f <pool/dataset:folder>");
+	printf("OPTIONS\n");
+	printf("\t%-18s%s\n", "-d", "look for pool in device /dev/da* and /dev/ada*");
+	printf("\t%-18s%s\n", "-l pool_name", "list dataset for pool_name");
+	printf("\t%-18s%s\n", "-f dataset:folder", "working folder, example: mypool/Pictures:/");
+	printf("\t%-18s%s\n", "-c", "restore a copie of all files");
+	printf("\t%-18s%s\n", "-r", "recursive list or copie");
+
+	exit(EX_USAGE);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1143,7 +1161,9 @@ main(int argc, char **argv)
 				opt_devprint = 1;
 				break;
 			case 'f':
-				fname = optarg;
+				fname = malloc(strlen("zfs:") + strlen(optarg) + 1);
+				(void)strcpy(fname, "zfs:");
+				(void)strcat(fname, optarg);
 				break;
 			case 'c':
 				opt_copy = 1;
@@ -1155,7 +1175,7 @@ main(int argc, char **argv)
 				opt_zfs_list = optarg;
 				break;
 			default:
-				return (0);
+				usage();
 		}
 	}
 	ret = zfs_dev_init();
@@ -1172,10 +1192,8 @@ main(int argc, char **argv)
 			return (ret);
 	}
 	/* normal cmd */
-	if (fname == NULL) {
-		printf("plz select option f\n");
-		return (0);
-	}
+	if (fname == NULL)
+		usage();
 	const char *file;
 	int mode = O_RDONLY;
 	struct open_file f;
