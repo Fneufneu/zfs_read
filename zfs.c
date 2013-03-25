@@ -1045,12 +1045,13 @@ zfs_recover(const char *file, struct open_file *f)
 				SLIST_HEAD_INITIALIZER(head);
 			struct entry {
 				SLIST_ENTRY(entry) entries;
-				char file[MAXNAMELEN];
+				char *file;
 			} *n1;
 			SLIST_INIT(&head);
 			while ((ret = zfs_readdir(f, &d)) == 0) {
 				d_name = d.d_name;
 				n1 = malloc(sizeof(struct entry));
+				n1->file = malloc(strlen(file) + strlen(d_name) + 2);
 				sprintf(n1->file, "%s/%s", file, d_name);
 				SLIST_INSERT_HEAD(&head, n1, entries);
 			}
@@ -1064,6 +1065,7 @@ zfs_recover(const char *file, struct open_file *f)
 				printf("%s\n", d_name);
 				if (opt_recursive)
 						ret = zfs_recover(d_name, f);
+				free(n1->file);
 				free(n1);
 				if (opt_recursive && ret != 0)
 					return (ret);
@@ -1074,7 +1076,7 @@ zfs_recover(const char *file, struct open_file *f)
 			printf("%s\n", file);
 			return (0);
 		}
-		char dest[MAXNAMELEN];
+		char *dest;
 		const char *lc;
 		const char *tmpd;
 		char dataset[256];
@@ -1092,7 +1094,7 @@ zfs_recover(const char *file, struct open_file *f)
 			memset(dataset, 0, 256);
 			strncpy(dataset, tmpd, lc - tmpd);
 		}
-		//sprintf(dest, "/wdred/%s%s", dataset, ++lc);
+		dest = malloc(strlen("/wdred/") + strlen(dataset) + strlen(file) + 1);
 		sprintf(dest, "/wdred/%s%s", dataset, file);
 		char * folder;
 		folder = dirname(dest);
