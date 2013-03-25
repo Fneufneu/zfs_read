@@ -1008,6 +1008,7 @@ build(char *path, mode_t omode)
 #define	READ_BL_SIZE	32*1024
 char *dirname(const char *);
 char *fname = NULL;
+const char *destfolder = NULL;
 int	opt_copy = 0;
 int opt_recursive = 0;
 
@@ -1102,8 +1103,8 @@ zfs_recover(const char *file, struct open_file *f)
 			memset(dataset, 0, 256);
 			strncpy(dataset, tmpd, lc - tmpd);
 		}
-		dest = malloc(strlen("/wdred/") + strlen(dataset) + strlen(file) + 1);
-		sprintf(dest, "/wdred/%s%s", dataset, file);
+		dest = malloc(strlen(destfolder) + 1 + strlen(dataset) + strlen(file) + 1);
+		sprintf(dest, "%s/%s%s", destfolder, dataset, file);
 		char * folder;
 		folder = dirname(dest);
 		ret = build(folder, 0755);
@@ -1158,12 +1159,12 @@ usage(void)
 	printf("%s\n%s\n%s\n\n",
 		"usage: zfs_read -d",
 		"       zfs_read -l <pool_name>",
-		"       zfs_read [-c] [-r] -f <pool/dataset:folder>");
+		"       zfs_read [-c <dest_folder>] [-r] -f <pool/dataset:folder>");
 	printf("OPTIONS\n");
 	printf("\t%-18s%s\n", "-d", "look for pool in device /dev/da* and /dev/ada*");
 	printf("\t%-18s%s\n", "-l pool_name", "list dataset for pool_name");
 	printf("\t%-18s%s\n", "-f dataset:folder", "working folder, example: mypool/Pictures:/");
-	printf("\t%-18s%s\n", "-c", "restore a copie of all files");
+	printf("\t%-18s%s\n", "-c destfolder", "restore a copie of all files in destfolder");
 	printf("\t%-18s%s\n", "-r", "recursive list or copie");
 
 	exit(EX_USAGE);
@@ -1175,7 +1176,7 @@ main(int argc, char **argv)
 	int ret, ch, opt_devprint = 0;
 	const char * opt_zfs_list = NULL;
 
-	while ((ch = getopt(argc, argv, "df:rcl:")) != -1) {
+	while ((ch = getopt(argc, argv, "df:rc:l:")) != -1) {
 		switch (ch) {
 			case 'd':
 				opt_devprint = 1;
@@ -1187,6 +1188,7 @@ main(int argc, char **argv)
 				break;
 			case 'c':
 				opt_copy = 1;
+				destfolder = optarg;
 				break;
 			case 'r':
 				opt_recursive = 1;
