@@ -1005,7 +1005,7 @@ build(char *path, mode_t omode)
 	return (retval);
 }
 
-#define	READ_BL_SIZE	512*1024
+#define	READ_BL_SIZE	32*1024
 char *dirname(const char *);
 char *fname = NULL;
 int	opt_copy = 0;
@@ -1029,12 +1029,14 @@ zfs_recover(const char *file, struct open_file *f)
 
 	if (!(f->f_flags & F_READ)) {
 		printf("no F_READ flag\n");
+		free(f->f_rabuf);
 		return (1);
 	}
 
 	struct stat sb;
 	if (0 != zfs_stat(f, &sb)) {
 		printf("zfs_stat failed\n");
+		free(f->f_rabuf);
 		return (1);
 	}
 
@@ -1055,6 +1057,10 @@ zfs_recover(const char *file, struct open_file *f)
 				sprintf(n1->file, "%s/%s", file, d_name);
 				SLIST_INSERT_HEAD(&head, n1, entries);
 			}
+			struct file *fp = (struct file *)f->f_fsdata;
+			free(fp->f_zap_leaf);
+			//free(f->f_fsdata);
+			free(f->f_rabuf);
 			zfs_close(f);
 			while (!SLIST_EMPTY(&head)) {
 				n1 = SLIST_FIRST(&head);
@@ -1074,6 +1080,8 @@ zfs_recover(const char *file, struct open_file *f)
 		//printf("file size=%d\n", (int)sb.st_size);
 		if (!opt_copy) {
 			printf("%s\n", file);
+			free(f->f_rabuf);
+			zfs_close(f);
 			return (0);
 		}
 		char *dest;
@@ -1101,6 +1109,9 @@ zfs_recover(const char *file, struct open_file *f)
 		ret = build(folder, 0755);
 		if (ret == 0) {
 			printf("failed to mkdir %s\n", folder);
+			free(dest);
+			free(f->f_rabuf);
+			zfs_close(f);
 			return (1);
 		}
 		struct stat sbdest;
@@ -1108,6 +1119,9 @@ zfs_recover(const char *file, struct open_file *f)
 		if (ret == 0
 		&& S_ISREG(sbdest.st_mode)
 		&& sb.st_size == sbdest.st_size) {
+			free(dest);
+			free(f->f_rabuf);
+			zfs_close(f);
 			return (0);
 		}
 		printf("writting in %s\n", dest);
@@ -1115,6 +1129,9 @@ zfs_recover(const char *file, struct open_file *f)
 		int fd = open(dest, O_WRONLY | O_CREAT);
 		if (fd < 0) {
 			printf("cannot open %s: %s\n", dest, strerror(errno));
+			free(dest);
+			free(f->f_rabuf);
+			zfs_close(f);
 			return (1);
 		}
 		fchmod(fd, 0644);
@@ -1126,6 +1143,9 @@ zfs_recover(const char *file, struct open_file *f)
 				break;
 		}
 		close(fd);
+		free(dest);
+		//free(f->f_fsdata);
+		free(f->f_rabuf);
 		zfs_close(f);
 	}
 	return (0);
