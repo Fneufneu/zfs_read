@@ -48,7 +48,6 @@ __FBSDID("$FreeBSD: stable/9/sys/boot/zfs/zfs.c 243243 2012-11-18 17:09:29Z ae $
 #include "libzfs.h"
 
 #include "zfsimpl.c"
-#include "part.c"
 
 #undef SOPEN_RASIZE
 #define	SOPEN_RASIZE	1024 * 128

@@ -1,11 +1,9 @@
 # $FreeBSD: stable/9/sys/boot/zfs/Makefile 243219 2012-11-18 12:28:29Z avg $
 
-#LIB=		zfsboot
-#INTERNALLIB=
 PROG=		zfs_read
 NO_MAN=
 
-SRCS+=		zfs.c
+SRCS+=		zfs.c part.c
 
 CFLAGS+=	-DBOOTPROG=\"zfsloader\"
 CFLAGS+=	-I${.CURDIR}/common -I.
