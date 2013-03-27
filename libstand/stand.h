@@ -235,9 +235,13 @@ extern void	*reallocf(void *ptr, size_t size);
 extern void	mallocstats(void);
 
 extern int	printf(const char *fmt, ...) __printflike(1, 2);
+#if 0
 extern void	vprintf(const char *fmt, __va_list);
+#endif
 extern int	sprintf(char *buf, const char *cfmt, ...) __printflike(2, 3);
+#if 0
 extern void	vsprintf(char *buf, const char *cfmt, __va_list);
+#endif
 
 extern void	twiddle(void);
 
@@ -360,7 +364,11 @@ extern int	null_readdir(struct open_file *f, struct dirent *d);
  */
 extern int		getchar(void);
 extern int		ischar(void);
+#if 0
 extern void		putchar(int);
+#else
+extern int  putchar(int);
+#endif
 extern int		devopen(struct open_file *, const char *, const char **);
 extern int		devclose(struct open_file *f);
 extern void		panic(const char *, ...) __dead2 __printflike(1, 2);
