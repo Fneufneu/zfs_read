@@ -5,9 +5,7 @@ NO_MAN=
 
 SRCS+=		zfs.c part.c
 
-CFLAGS+=	-DBOOTPROG=\"zfsloader\"
 CFLAGS+=	-I${.CURDIR}/common -I.
-#CFLAGS+=	-I${.CURDIR}/../..
 CFLAGS+=	-I${.CURDIR}/libstand
 CFLAGS+=	-I${.CURDIR}/zfs
 
@@ -19,9 +17,7 @@ CFLAGS+=	-m32
 
 CFLAGS+=	-Wformat -Wall
 
-
 CFLAGS+=	-DBOOT2=1
 
-#.include <bsd.lib.mk>
 .include <bsd.prog.mk>
 
