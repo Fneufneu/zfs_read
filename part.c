@@ -27,7 +27,10 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/boot/common/part.c 246938 2013-02-18 08:24:39Z ae $");
 
-#include <stand.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/param.h>
 #include <sys/diskmbr.h>
 #include <sys/disklabel.h>
