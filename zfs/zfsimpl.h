@@ -913,6 +913,9 @@ typedef struct sa_hdr_phys {
 #define	SA_UID_OFFSET		24
 #define	SA_GID_OFFSET		32
 #define	SA_PARENT_OFFSET	40
+#define	SA_FLAG_OFFSET	48
+#define	SA_ATIME_OFFSET	56
+#define	SA_MTIME_OFFSET	72
 
 /*
  * Intent log header - this on disk structure holds fields to manage

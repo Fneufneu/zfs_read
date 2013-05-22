@@ -1119,6 +1119,17 @@ zfs_recover(const char *file, struct open_file *f)
 		if (ret == 0
 		&& S_ISREG(sbdest.st_mode)
 		&& sb.st_size == sbdest.st_size) {
+			printf("mtime = %d\n", sb.st_mtim.tv_sec);
+			printf("dest mtime = %d\n", sbdest.st_mtim.tv_sec);
+			if (sb.st_mtim.tv_sec != 0 &&
+			sb.st_mtim.tv_sec != sbdest.st_mtim.tv_sec) {
+				struct timeval times[2];
+				TIMESPEC_TO_TIMEVAL(&times[0], &sb.st_atim);
+				TIMESPEC_TO_TIMEVAL(&times[1], &sb.st_mtim);
+				ret = utimes(dest, times);
+				if (ret == 0)
+					printf("%s mtime updated\n", dest);
+			}
 			free(dest);
 			free(f->f_rabuf);
 			zfs_close(f);
@@ -1143,6 +1154,13 @@ zfs_recover(const char *file, struct open_file *f)
 				break;
 		}
 		close(fd);
+
+		/* mtime */
+		struct timeval times[2];
+		TIMESPEC_TO_TIMEVAL(&times[0], &sb.st_atim);
+		TIMESPEC_TO_TIMEVAL(&times[1], &sb.st_mtim);
+		(void)utimes(dest, times);
+
 		free(dest);
 		//free(f->f_fsdata);
 		free(f->f_rabuf);

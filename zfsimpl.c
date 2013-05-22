@@ -1943,6 +1943,8 @@ zfs_dnode_stat(const spa_t *spa, dnode_phys_t *dn, struct stat *sb)
 		sb->st_uid = zp->zp_uid;
 		sb->st_gid = zp->zp_gid;
 		sb->st_size = zp->zp_size;
+		sb->st_mtim.tv_sec = zp->zp_mtime[1];
+		sb->st_atim.tv_sec = zp->zp_atime[1];
 	} else {
 		sa_hdr_phys_t *sahdrp;
 		int hdrsize;
@@ -1977,6 +1979,10 @@ zfs_dnode_stat(const spa_t *spa, dnode_phys_t *dn, struct stat *sb)
 		    SA_GID_OFFSET);
 		sb->st_size = *(uint64_t *)((char *)sahdrp + hdrsize +
 		    SA_SIZE_OFFSET);
+		sb->st_atim = *(struct timespec *)((char *)sahdrp + hdrsize +
+		    SA_ATIME_OFFSET);
+		sb->st_mtim = *(struct timespec *)((char *)sahdrp + hdrsize +
+		    SA_MTIME_OFFSET);
 		if (buf != NULL)
 			zfs_free(buf, size);
 	}
