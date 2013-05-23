@@ -1943,8 +1943,8 @@ zfs_dnode_stat(const spa_t *spa, dnode_phys_t *dn, struct stat *sb)
 		sb->st_uid = zp->zp_uid;
 		sb->st_gid = zp->zp_gid;
 		sb->st_size = zp->zp_size;
-		sb->st_mtim.tv_sec = zp->zp_mtime[1];
-		sb->st_atim.tv_sec = zp->zp_atime[1];
+		sb->st_mtim.tv_sec = zp->zp_mtime[0];
+		sb->st_atim.tv_sec = zp->zp_atime[0];
 	} else {
 		sa_hdr_phys_t *sahdrp;
 		int hdrsize;
