@@ -437,14 +437,15 @@ zfs_probe_partition(void *arg, const char *partname,
 	int ret;
 
 	/* Probe only freebsd-zfs and freebsd partitions */
-	if (part->type != PART_FREEBSD &&
-	    part->type != PART_FREEBSD_ZFS)
-		return;
+	//if (part->type != PART_FREEBSD &&
+	//    part->type != PART_FREEBSD_ZFS)
+	//	return;
 
 	ppa = (struct zfs_probe_args *)arg;
 	strncpy(devname, ppa->devname, strlen(ppa->devname) - 1);
 	devname[strlen(ppa->devname) - 1] = '\0';
 	sprintf(devname, "%s%s:", devname, partname);
+        printf("dn: %s\n", devname);
 	pa.fd = open(devname, O_RDONLY);
 	if (pa.fd == -1)
 		return;
@@ -473,7 +474,7 @@ zfs_probe_dev(const char *devname, uint64_t *pool_guid)
 	struct zfs_probe_args pa;
 	off_t mediasz;
 	int ret;
-
+printf("zppd: %s\n", devname);
 	pa.fd = open(devname, O_RDONLY);
 	if (pa.fd == -1)
 		return (ENXIO);
@@ -730,6 +731,17 @@ i386_zfs_probe(void)
 			sprintf(devname, "/dev/ada%d", unit);
 			if (zfs_probe_dev(devname, NULL) != 0)
 				break;
+			sprintf(devname, "/dev/ada%dp1", unit);
+                        zfs_probe_dev(devname, NULL);
+			sprintf(devname, "/dev/ada%dp2", unit);
+                        zfs_probe_dev(devname, NULL);
+			sprintf(devname, "/dev/ada%dp3", unit);
+                        zfs_probe_dev(devname, NULL);
+			sprintf(devname, "/dev/ada%dp4", unit);
+                        zfs_probe_dev(devname, NULL);
+			sprintf(devname, "/dev/ada%dp5", unit);
+                        zfs_probe_dev(devname, NULL);
+
     }
     for (unit = 0; unit < MAXBDDEV; unit++) {
 			sprintf(devname, "/dev/da%d", unit);
@@ -1008,15 +1020,48 @@ build(char *path, mode_t omode)
 char *dirname(const char *);
 char *fname = NULL;
 const char *destfolder = NULL;
-int	opt_copy = 0;
-int opt_recursive = 0;
+int	     opt_copy = 0;
+int     opt_recursive = 0;
+int opt_ignore_errors = 0;
+char **exclude_list = NULL;
+int exclude_list_size = 0;
+int exclude_list_count = 0;
+
+void
+add_exclude(char *prefix)
+{
+	int newsize;
+	printf("exclude: %s\n", prefix);
+
+	if (exclude_list_size == exclude_list_count) {
+		if (exclude_list_size) {
+			newsize = exclude_list_size << 1;
+		} else {
+			newsize = 8;
+		}
+		printf("resize: %d -> %d\n", newsize, sizeof(char*) * newsize);
+		exclude_list = realloc(exclude_list, sizeof(char*) * newsize);
+		exclude_list_size = newsize;
+	}
+	exclude_list[exclude_list_count++] = prefix;
+}
+
 
 int
 zfs_recover(const char *file, struct open_file *f)
 {
 	int ret = 0;
 
-	//printf("zfs_recover file=%s\n", file);
+	printf("zfs_recover file=%s\n", file);
+	int flen=strlen(file); int xlen;
+	for (int xi=0; xi < exclude_list_count; xi++) {
+		xlen=strlen(exclude_list[xi]);
+		if (xlen > flen) continue;
+		if (!memcmp(file, exclude_list[xi], xlen)) {
+			printf("matches exclude rule %s\n", exclude_list[xi]);
+			return ret;
+		}
+	}
 	ret = zfs_open(file, f);
 	if (ret != 0) {
 		printf("zfs_open failed: %s\n", strerror(ret));
@@ -1117,7 +1162,8 @@ zfs_recover(const char *file, struct open_file *f)
 					ret = zfs_recover(d_name, f);
 			free(n1->file);
 			free(n1);
-		}
+			if (opt_recursive && ret != 0 && opt_ignore_errors == 0)
+				return ret;		}
 	} else if (S_ISREG(sb.st_mode)) {
 		//printf("file size=%d\n", (int)sb.st_size);
 		if (!opt_copy) {
@@ -1215,7 +1261,7 @@ main(int argc, char **argv)
 	int ret, ch, opt_devprint = 0;
 	const char * opt_zfs_list = NULL;
 
-	while ((ch = getopt(argc, argv, "df:rc:l:")) != -1) {
+	while ((ch = getopt(argc, argv, "df:rc:l:x:i")) != -1) {
 		switch (ch) {
 			case 'd':
 				opt_devprint = 1;
@@ -1234,6 +1280,12 @@ main(int argc, char **argv)
 				break;
 			case 'l':
 				opt_zfs_list = optarg;
+				break;
+			case 'i':
+				opt_ignore_errors = 1;
+				break;
+			case 'x':
+				add_exclude(optarg);
 				break;
 			default:
 				usage();

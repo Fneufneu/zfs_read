@@ -1178,8 +1178,8 @@ zio_read(const spa_t *spa, const blkptr_t *bp, void *buf)
 			break;
 	}
 	if (error != 0)
-		printf("ZFS: i/o error - all block copies unavailable\n");
-	return (error);
+		printf("ZFS: i/o error !!!- all block copies unavailable\n");
+	return (0); /* error); */
 }
 
 static int
