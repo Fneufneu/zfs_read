@@ -1040,70 +1040,97 @@ zfs_recover(const char *file, struct open_file *f)
 		return (1);
 	}
 
+	char *dest;
+	const char *lc;
+	const char *tmpd;
+	char dataset[256];
+	lc = strchr(fname, ':');
+	if (lc == NULL)
+		return (1);
+	tmpd = strchr(lc, '/');
+	lc = strchr(++lc, ':');
+	if (lc == NULL)
+		return (1);
+	if (tmpd == NULL || ((lc - tmpd) < 0)) {
+		strcpy(dataset, "");
+	} else {
+		++tmpd;
+		memset(dataset, 0, 256);
+		strncpy(dataset, tmpd, lc - tmpd);
+	}
+	dest = malloc(strlen(destfolder) + 1 + strlen(dataset) + strlen(file) + 1);
+	sprintf(dest, "%s/%s%s", destfolder, dataset, file);
+
 	if (S_ISDIR(sb.st_mode)) {
-			struct dirent d;
-			const char * d_name;
-			SLIST_HEAD(slisthead, entry) head =
-				SLIST_HEAD_INITIALIZER(head);
-			struct entry {
-				SLIST_ENTRY(entry) entries;
-				char *file;
-			} *n1;
-			SLIST_INIT(&head);
-			while ((ret = zfs_readdir(f, &d)) == 0) {
-				d_name = d.d_name;
-				n1 = malloc(sizeof(struct entry));
-				n1->file = malloc(strlen(file) + strlen(d_name) + 2);
-				sprintf(n1->file, "%s/%s", file, d_name);
-				SLIST_INSERT_HEAD(&head, n1, entries);
+		if (opt_copy) {
+			ret = build(dest, 0755);
+			if (ret == 0) {
+				printf("failed to mkdir %s\n", dest);
+				free(dest);
+				free(f->f_rabuf);
+				zfs_close(f);
+				return (1);
 			}
-			struct file *fp = (struct file *)f->f_fsdata;
-			free(fp->f_zap_leaf);
-			//free(f->f_fsdata);
-			free(f->f_rabuf);
-			zfs_close(f);
-			while (!SLIST_EMPTY(&head)) {
-				n1 = SLIST_FIRST(&head);
-				SLIST_REMOVE_HEAD(&head, entries);
-				d_name = n1->file;
-				while (d_name[0] == '/' && d_name[1] == '/')
-					++d_name;
-				printf("%s\n", d_name);
-				if (opt_recursive)
-						ret = zfs_recover(d_name, f);
-				free(n1->file);
-				free(n1);
-				if (opt_recursive && ret != 0)
-					return (ret);
+			struct stat sbdest;
+			ret = stat(dest, &sbdest);
+			if (ret == 0
+			&& S_ISDIR(sbdest.st_mode)
+			&& sb.st_mtim.tv_sec != 0
+			&& sb.st_mtim.tv_sec != sbdest.st_mtim.tv_sec) {
+				struct timeval times[2];
+				TIMESPEC_TO_TIMEVAL(&times[0], &sb.st_atim);
+				TIMESPEC_TO_TIMEVAL(&times[1], &sb.st_mtim);
+				ret = utimes(dest, times);
+				if (ret == 0)
+					printf("%s mtime updated\n", dest);
 			}
+		}
+		struct dirent d;
+		const char * d_name;
+		SLIST_HEAD(slisthead, entry) head =
+			SLIST_HEAD_INITIALIZER(head);
+		struct entry {
+			SLIST_ENTRY(entry) entries;
+			char *file;
+		} *n1;
+		SLIST_INIT(&head);
+		while ((ret = zfs_readdir(f, &d)) == 0) {
+			d_name = d.d_name;
+			n1 = malloc(sizeof(struct entry));
+			n1->file = malloc(strlen(file) + strlen(d_name) + 2);
+			sprintf(n1->file, "%s/%s", file, d_name);
+			SLIST_INSERT_HEAD(&head, n1, entries);
+		}
+		struct file *fp = (struct file *)f->f_fsdata;
+		free(fp->f_zap_leaf);
+		//free(f->f_fsdata);
+		free(f->f_rabuf);
+		zfs_close(f);
+		while (!SLIST_EMPTY(&head)) {
+			n1 = SLIST_FIRST(&head);
+			SLIST_REMOVE_HEAD(&head, entries);
+			d_name = n1->file;
+			while (d_name[0] == '/' && d_name[1] == '/')
+				++d_name;
+			printf("%s\n", d_name);
+			if (opt_recursive)
+					ret = zfs_recover(d_name, f);
+			free(n1->file);
+			free(n1);
+			if (opt_recursive && ret != 0) {
+				free(dest);
+				return (ret);
+			}
+		}
 	} else if (S_ISREG(sb.st_mode)) {
 		//printf("file size=%d\n", (int)sb.st_size);
 		if (!opt_copy) {
 			printf("%s\n", file);
 			free(f->f_rabuf);
 			zfs_close(f);
+			free(dest);
 			return (0);
 		}
-		char *dest;
-		const char *lc;
-		const char *tmpd;
-		char dataset[256];
-		lc = strchr(fname, ':');
-		if (lc == NULL)
-			return (1);
-		tmpd = strchr(lc, '/');
-		lc = strchr(++lc, ':');
-		if (lc == NULL)
-			return (1);
-		if (tmpd == NULL || ((lc - tmpd) < 0)) {
-			strcpy(dataset, "");
-		} else {
-			++tmpd;
-			memset(dataset, 0, 256);
-			strncpy(dataset, tmpd, lc - tmpd);
-		}
-		dest = malloc(strlen(destfolder) + 1 + strlen(dataset) + strlen(file) + 1);
-		sprintf(dest, "%s/%s%s", destfolder, dataset, file);
 		char * folder;
 		folder = dirname(dest);
 		ret = build(folder, 0755);
@@ -1119,8 +1146,6 @@ zfs_recover(const char *file, struct open_file *f)
 		if (ret == 0
 		&& S_ISREG(sbdest.st_mode)
 		&& sb.st_size == sbdest.st_size) {
-			printf("mtime = %d\n", sb.st_mtim.tv_sec);
-			printf("dest mtime = %d\n", sbdest.st_mtim.tv_sec);
 			if (sb.st_mtim.tv_sec != 0 &&
 			sb.st_mtim.tv_sec != sbdest.st_mtim.tv_sec) {
 				struct timeval times[2];
@@ -1161,11 +1186,12 @@ zfs_recover(const char *file, struct open_file *f)
 		TIMESPEC_TO_TIMEVAL(&times[1], &sb.st_mtim);
 		(void)utimes(dest, times);
 
-		free(dest);
 		//free(f->f_fsdata);
 		free(f->f_rabuf);
 		zfs_close(f);
 	}
+	free(dest);
+
 	return (0);
 }
 
