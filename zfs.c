@@ -1117,10 +1117,6 @@ zfs_recover(const char *file, struct open_file *f)
 					ret = zfs_recover(d_name, f);
 			free(n1->file);
 			free(n1);
-			if (opt_recursive && ret != 0) {
-				free(dest);
-				return (ret);
-			}
 		}
 	} else if (S_ISREG(sb.st_mode)) {
 		//printf("file size=%d\n", (int)sb.st_size);
