@@ -3,7 +3,7 @@ zfs_read
 
 tool for read and recover files from zfs pool without import it 
 
-Only works on FreeBSD amd64
+Only works on FreeBSD 9+ amd64
 
 * use FreeBSD bootloader code for ZFS access
 * support ZFSv28 with features with lz4 compress support
@@ -11,3 +11,6 @@ Only works on FreeBSD amd64
 `status: The pool metadata is corrupted and the pool cannot be opened.`
 `action: Destroy and re-create the pool from a backup source.`
 
+#### Compile instructions
+
+You need FreeBSD and simply type: `make`
