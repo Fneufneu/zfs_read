@@ -47,6 +47,20 @@ __FBSDID("$FreeBSD: stable/9/sys/boot/zfs/zfs.c 243243 2012-11-18 17:09:29Z ae $
 
 #include "libzfs.h"
 
+#define READ_BL_SIZE    32*1024
+char *dirname(const char *);
+char *fname = NULL;
+const char *destfolder = NULL;
+int          opt_copy = 0;
+int     opt_recursive = 0;
+int opt_ignore_errors = 0;
+char **exclude_list = NULL;
+int exclude_list_size = 0;
+int exclude_list_count = 0;
+char **device_list = NULL;
+int device_list_size = 0;
+int device_list_count = 0;
+
 #include "zfsimpl.c"
 
 #undef SOPEN_RASIZE
@@ -433,7 +447,7 @@ zfs_probe_partition(void *arg, const char *partname,
 {
 	struct zfs_probe_args *ppa, pa;
 	struct ptable *table;
-	char devname[32];
+	char devname[64];
 	int ret;
 
 	/* Probe only freebsd-zfs and freebsd partitions */
@@ -445,7 +459,7 @@ zfs_probe_partition(void *arg, const char *partname,
 	strncpy(devname, ppa->devname, strlen(ppa->devname) - 1);
 	devname[strlen(ppa->devname) - 1] = '\0';
 	sprintf(devname, "%s%s:", devname, partname);
-        printf("dn: %s\n", devname);
+	printf("dn: %s\n", devname);
 	pa.fd = open(devname, O_RDONLY);
 	if (pa.fd == -1)
 		return;
@@ -458,7 +472,7 @@ zfs_probe_partition(void *arg, const char *partname,
 		pa.pool_guid = ppa->pool_guid;
 		pa.secsz = ppa->secsz;
 		table = ptable_open(&pa, part->end - part->start + 1,
-		    ppa->secsz, zfs_diskread);
+			ppa->secsz, zfs_diskread);
 		if (table != NULL) {
 			ptable_iterate(table, &pa, zfs_probe_partition);
 			ptable_close(table);
@@ -474,7 +488,7 @@ zfs_probe_dev(const char *devname, uint64_t *pool_guid)
 	struct zfs_probe_args pa;
 	off_t mediasz;
 	int ret;
-printf("zppd: %s\n", devname);
+	printf("Probe Dev: %s\n", devname);
 	pa.fd = open(devname, O_RDONLY);
 	if (pa.fd == -1)
 		return (ENXIO);
@@ -715,9 +729,23 @@ zfs_list(const char *name)
 static void
 i386_zfs_probe(void)
 {
-    char devname[32];
+    char devname[64];
     int unit;
-		
+    int part;
+
+	/* User specified devices to probe */
+    if (device_list_count) {
+    	for (int di=0; di < device_list_count; di++) {
+			if (zfs_probe_dev(device_list[di], NULL) != 0) {
+				/* try with /dev prefix */
+				sprintf(devname, "/dev/%s", device_list[di]);
+				zfs_probe_dev(devname, NULL);
+			}
+		}
+		return;
+
+    }
+
     /*
      * Open all the disks we can find and see if we can reconstruct
      * ZFS pools from them.
@@ -731,19 +759,12 @@ i386_zfs_probe(void)
 			sprintf(devname, "/dev/ada%d", unit);
 			if (zfs_probe_dev(devname, NULL) != 0)
 				break;
-			sprintf(devname, "/dev/ada%dp1", unit);
-                        zfs_probe_dev(devname, NULL);
-			sprintf(devname, "/dev/ada%dp2", unit);
-                        zfs_probe_dev(devname, NULL);
-			sprintf(devname, "/dev/ada%dp3", unit);
-                        zfs_probe_dev(devname, NULL);
-			sprintf(devname, "/dev/ada%dp4", unit);
-                        zfs_probe_dev(devname, NULL);
-			sprintf(devname, "/dev/ada%dp5", unit);
-                        zfs_probe_dev(devname, NULL);
-
-    }
-    for (unit = 0; unit < MAXBDDEV; unit++) {
+            for (part = 1; part < 9; part++) {
+				sprintf(devname, "/dev/ada%dp%d", unit, part);
+				zfs_probe_dev(devname, NULL);
+			}
+	}
+	for (unit = 0; unit < MAXBDDEV; unit++) {
 			sprintf(devname, "/dev/da%d", unit);
 			if (zfs_probe_dev(devname, NULL) != 0)
 				break;
@@ -935,7 +956,7 @@ myread(struct open_file *f, void *dest, size_t bcount)
 			/* no more data, return what we had */
 			if (f->f_ralen == 0)
 					return(bcount - resid);
-    }	
+	}	
 }
 
 /*
@@ -1016,17 +1037,6 @@ build(char *path, mode_t omode)
 	return (retval);
 }
 
-#define	READ_BL_SIZE	32*1024
-char *dirname(const char *);
-char *fname = NULL;
-const char *destfolder = NULL;
-int	     opt_copy = 0;
-int     opt_recursive = 0;
-int opt_ignore_errors = 0;
-char **exclude_list = NULL;
-int exclude_list_size = 0;
-int exclude_list_count = 0;
-
 void
 add_exclude(char *prefix)
 {
@@ -1039,11 +1049,31 @@ add_exclude(char *prefix)
 		} else {
 			newsize = 8;
 		}
-		printf("resize: %d -> %d\n", newsize, sizeof(char*) * newsize);
+		//printf("resize: %d -> %d\n", newsize, sizeof(char*) * newsize);
 		exclude_list = realloc(exclude_list, sizeof(char*) * newsize);
 		exclude_list_size = newsize;
 	}
 	exclude_list[exclude_list_count++] = prefix;
+}
+
+
+void
+add_device(char *devname)
+{
+	int newsize;
+	printf("Scan device: %s\n", devname);
+
+	if (device_list_size == device_list_count) {
+		if (device_list_size) {
+			newsize = device_list_size << 1;
+		} else {
+			newsize = 8;
+		}
+		//printf("resize: %d -> %d\n", newsize, sizeof(char*) * newsize);
+		device_list = realloc(device_list, sizeof(char*) * newsize);
+		device_list_size = newsize;
+	}
+	device_list[device_list_count++] = devname;
 }
 
 
@@ -1242,15 +1272,18 @@ usage(void)
 {
 	
 	printf("%s\n%s\n%s\n\n",
-		"usage: zfs_read -d",
-		"       zfs_read -l <pool_name>",
-		"       zfs_read [-c <dest_folder>] [-r] -f <pool/dataset:folder>");
+		"usage: zfs_read [-n device] [-i] -d",
+		"       zfs_read [-n device] [-i] -l <pool_name>",
+		"       zfs_read [-n device] [-i [-i]] [-c <dest_folder>] [-x prefix ] [-r] -f <pool/dataset:folder>");
 	printf("OPTIONS\n");
 	printf("\t%-18s%s\n", "-d", "look for pool in device /dev/da* and /dev/ada*");
+	printf("\t%-18s%s\n", "-n device", "look for pool in device or file - repeat for multiple devices");
 	printf("\t%-18s%s\n", "-l pool_name", "list dataset for pool_name");
 	printf("\t%-18s%s\n", "-f dataset:folder", "working folder, example: mypool/Pictures:/");
 	printf("\t%-18s%s\n", "-c destfolder", "restore a copie of all files in destfolder");
 	printf("\t%-18s%s\n", "-r", "recursive list or copie");
+	printf("\t%-18s%s\n", "-i [-i]", "ignore errors (-i again to ignore more)");
+	printf("\t%-18s%s\n", "-x path_prefix", "exclude paths beginning with this prefix");
 
 	exit(EX_USAGE);
 }
@@ -1261,7 +1294,7 @@ main(int argc, char **argv)
 	int ret, ch, opt_devprint = 0;
 	const char * opt_zfs_list = NULL;
 
-	while ((ch = getopt(argc, argv, "df:rc:l:x:i")) != -1) {
+	while ((ch = getopt(argc, argv, "df:rc:l:x:in:")) != -1) {
 		switch (ch) {
 			case 'd':
 				opt_devprint = 1;
@@ -1282,10 +1315,13 @@ main(int argc, char **argv)
 				opt_zfs_list = optarg;
 				break;
 			case 'i':
-				opt_ignore_errors = 1;
+				opt_ignore_errors++;
 				break;
 			case 'x':
 				add_exclude(optarg);
+				break;
+			case 'n':
+				add_device(optarg);
 				break;
 			default:
 				usage();
