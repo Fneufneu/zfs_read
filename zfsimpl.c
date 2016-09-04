@@ -930,8 +930,13 @@ vdev_probe(vdev_phys_read_t *read, void *read_priv, spa_t **spap)
 	if (nvlist_find(nvlist,
 			ZPOOL_CONFIG_FEATURES_FOR_READ,
 			DATA_TYPE_NVLIST, 0, &features) == 0
-	    && nvlist_check_features_for_read(features) != 0)
-		return (EIO);
+	    && nvlist_check_features_for_read(features) != 0) {
+
+        //unsupported flags are maybe not too bad
+        if (opt_ignore_errors == 0) {
+			return (EIO);
+        }
+}
 
 	if (nvlist_find(nvlist,
 			ZPOOL_CONFIG_POOL_STATE,
@@ -1178,7 +1183,9 @@ zio_read(const spa_t *spa, const blkptr_t *bp, void *buf)
 			break;
 	}
 	if (error != 0)
-		printf("ZFS: i/o error - all block copies unavailable\n");
+		printf("ZFS: i/o error !!!- all block copies unavailable\n");
+        if (opt_ignore_errors > 1)
+            return 0;
 	return (error);
 }
 
